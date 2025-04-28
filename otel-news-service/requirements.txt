@@ -1,0 +1,5 @@
+# For OpenTelemetry SDK and API
+opentelemetry-sdk
+
+# For AWS Interaction
+boto3
