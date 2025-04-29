@@ -19,30 +19,78 @@ PS: See <https://opentelemetry.io/docs/languages/python/getting-started/> for a 
 
 ## Functionality
 
-* **Configuration:** Sets AWS region, CloudWatch log group name, and log stream name via constants.
-* **AWS CloudWatch Interaction:**
-  * `create_log_stream`: Checks if a specified CloudWatch log stream exists within a log group and creates it if it doesn't. Handles potential `ResourceAlreadyExistsException`.
-  * `put_log_events`: Sends a list of log events (dictionaries with `timestamp` and `message` keys) to a specified CloudWatch log stream. Includes basic error handling for `boto3` exceptions.
-* **OpenTelemetry Event Generation:**
-  * `generate_otel_event`:
-    * Initializes a basic OpenTelemetry tracer.
-      * Starts an OTel span to get a valid `trace_id` and `span_id` from the current context.
-      * Constructs a Python dictionary mimicking the structure of an OpenTelemetry Log Data Model event. This includes:
-        * `timestamp`: Nanosecond precision timestamp.
-        * `severity`: Log level (e.g., "INFO").
-        * `name`: A descriptive name for the event type.
-        * `body`: The main payload, containing structured data about the NEWS results (entities, confidence, source URL).
-        * `attributes`: Key-value pairs providing additional context (e.g., model versions, thresholds, trace/span IDs).
-        * `resource`: Attributes describing the service generating the event (e.g., service name, host).
-        * `instrumentation_scope`: Information about the library generating the event.
-        * `format_trace_id`, `format_span_id`: Helper functions to format integer trace/span IDs into their standard hexadecimal representations.
-* **Integration Function:**
-  * `otel_event_to_cloudwatch`: Takes the generated OTel event dictionary, formats it into the structure required by `put_log_events` (timestamp and JSON string message), ensures the log stream exists, and calls `put_log_events` to send it.
-* **Main Execution (`main` function):**
-  * Performs minimal OpenTelemetry SDK initialization (sets up a `TracerProvider` with resource attributes but doesn't configure a real exporter like OTLP or Jaeger). This setup is primarily needed to generate valid trace/span contexts within `generate_otel_event`.
-  * Calls `generate_otel_event` to create the sample event.
-  * Calls `otel_event_to_cloudwatch` to send the event to AWS.
-  * Calls `tracer_provider.shutdown()` for graceful OTel SDK cleanup.
+
+## **Summary: `CloudWatchLogger` Class**
+
+The `CloudWatchLogger` class is designed to **send structured log events to AWS CloudWatch Logs**, enriched with **OpenTelemetry tracing**. It includes support for thread safety, trace metadata, retry logic, and structured formatting of logs.
+
+---
+
+### **Constructor: `__init__`**
+- **Purpose**: Initializes the logger with AWS log group/stream names and sets up OpenTelemetry tracing.
+- **Key Actions**:
+  - Stores log group and stream.
+  - Initializes a thread lock.
+  - Sets up OpenTelemetry tracer.
+  - Calls `_ensure_log_group_and_stream()` to verify or create log group and stream.
+  - (**Note**: The `boto3` client is commented out and needs to be enabled.)
+
+---
+
+### **Private Methods**
+
+#### **`_ensure_log_group_and_stream()`**
+- **Purpose**: Ensures the specified log group and log stream exist in CloudWatch.
+- **Behavior**:
+  - Creates log group and stream if they don't exist.
+  - Refreshes the sequence token required to send logs.
+
+#### **`_refresh_sequence_token()`**
+- **Purpose**: Updates the `sequence_token` by querying CloudWatch for the current token.
+- **Used when**: Sending logs or recovering from an invalid token error.
+
+#### **`_get_current_timestamp_ns()`**
+- **Purpose**: Returns the current time in **nanoseconds**.
+- **Used for**: Timestamps on log events.
+
+#### **`_generate_trace_context()`**
+- **Purpose**: Creates a trace context (trace ID and span ID) using OpenTelemetry.
+- **Used in**: `create_event()` to include traceability in logs.
+
+---
+
+### **Public Methods**
+
+#### **`create_event(entities, low_confidence_entities, article_url)`**
+- **Purpose**: Builds a structured log event with:
+  - Timestamp
+  - Severity level
+  - Entities and low-confidence entities
+  - Article metadata
+  - Trace and span IDs
+  - Versioning and instrumentation metadata
+
+#### **`send_event(event)`**
+- **Purpose**: Sends a **single** event to CloudWatch by wrapping it in a list and calling `send_events()`.
+
+#### **`send_events(events)`**
+- **Purpose**: Sends **multiple** log events to CloudWatch Logs.
+- **Features**:
+  - Converts each event to JSON format.
+  - Adds timestamp.
+  - Handles retry logic (up to 3 times) for `InvalidSequenceTokenException`.
+  - Uses a thread lock to ensure only one thread sends logs at a time.
+
+---
+
+### **Notable Features**
+- OpenTelemetry integration for tracing
+- Thread-safe log transmission
+- Retry logic for handling AWS sequence token issues
+- Uses `threading.Lock()` to ensure thread safety
+- Requires uncommenting and configuring `boto3` client for real AWS interaction
+
+---
 
 ## How to Run
 
@@ -50,18 +98,19 @@ PS: See <https://opentelemetry.io/docs/languages/python/getting-started/> for a 
 
     * Python 3 installed.
     * AWS credentials configured (e.g., via environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, or an IAM role if running on EC2/ECS/Lambda). The configured user/role needs permissions for `logs:CreateLogStream` and `logs:PutLogEvents`.
-    * A CloudWatch Log Group (specified by `LOG_GROUP_NAME`) must exist in the target AWS region (`AWS_REGION`). The script *does not* create the log group, only the log stream within it.
-2. **Install Dependencies:**
+2. **Install Dependencies (Ideally in a venv and activate it - so you don't pollute your global py environment):**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-3. **Configure:** Modify the constants `LOG_GROUP_NAME`, `LOG_STREAM_NAME`, and `AWS_REGION` at the top of the script to match your environment.
+3. **Address TODO on line 16 of CloudWatchLogger.init():** Use your preferred way to initialize the boto3 client with your credentials.
 4. **Execute:**
 
     ```bash
-    python news-sample-event.py
+    python main.py
     ```
 
-The script will print messages indicating whether the log stream was created (or already existed) and the success or failure of sending the log event to CloudWatch.
+The script will create the log group and log stream if they don't exist. Then 10 threads are spawned. Each thread will insert one otel event in the log stream. It and the success or failure of sending the log event to CloudWatch.
+
+Output - Navigate to your Cloudwatch console and view the insert log entries.
