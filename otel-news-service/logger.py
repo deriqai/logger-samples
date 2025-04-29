@@ -8,14 +8,13 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.trace import format_trace_id, format_span_id
 
-
 class CloudWatchLogger:
     def __init__(self, log_group: str, log_stream: str, region: str = 'us-east-1'):
         self.log_group = log_group
         self.log_stream = log_stream
 
         #TODO - Setup the boto client with your AWS credentials 
-        # self.client = boto3.client('logs', region_name=region)
+        self.awsClient = boto3.client('logs', region_name=region)
         
         self.sequence_token: Optional[str] = None
         self.lock = threading.Lock()  # Lock to protect writes
@@ -29,20 +28,20 @@ class CloudWatchLogger:
 
     def _ensure_log_group_and_stream(self):
         try:
-            self.client.create_log_group(logGroupName=self.log_group)
-        except self.client.exceptions.ResourceAlreadyExistsException:
+            self.awsClient.create_log_group(logGroupName=self.log_group)
+        except self.awsClient.exceptions.ResourceAlreadyExistsException:
             pass
 
         try:
-            self.client.create_log_stream(logGroupName=self.log_group, logStreamName=self.log_stream)
-        except self.client.exceptions.ResourceAlreadyExistsException:
+            self.awsClient.create_log_stream(logGroupName=self.log_group, logStreamName=self.log_stream)
+        except self.awsClient.exceptions.ResourceAlreadyExistsException:
             pass
 
         self._refresh_sequence_token()
 
     def _refresh_sequence_token(self):
         """Force refresh the current sequence token."""
-        response = self.client.describe_log_streams(
+        response = self.awsClient.describe_log_streams(
             logGroupName=self.log_group,
             logStreamNamePrefix=self.log_stream
         )
@@ -124,12 +123,12 @@ class CloudWatchLogger:
                     if self.sequence_token:
                         kwargs['sequenceToken'] = self.sequence_token
 
-                    response = self.client.put_log_events(**kwargs)
+                    response = self.awsClient.put_log_events(**kwargs)
                     self.sequence_token = response.get('nextSequenceToken')
                     print(f"Successfully sent {len(events)} event(s).")
                     break  # Success, exit loop
 
-                except self.client.exceptions.InvalidSequenceTokenException as e:
+                except self.awsClient.exceptions.InvalidSequenceTokenException as e:
                     print("Invalid sequence token detected. Refreshing...")
                     self._refresh_sequence_token()
                     attempts += 1

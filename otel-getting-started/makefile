@@ -23,6 +23,8 @@ bootstrap:
 	@echo "Setting up dependencies..."
 	@echo "Consider running this inside a virtual environment."
 	@echo ""
+	@echo "pip install --upgrade pip"
+	@echo ""
 	# Use python -m pip for potentially better interpreter association
 	python -m pip install flask opentelemetry-distro
 	# Ensure opentelemetry-bootstrap is run after installation
