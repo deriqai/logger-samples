@@ -1,5 +1,6 @@
 import json
 import time
+import traceback
 import boto3
 import threading
 from typing import List, Dict, Optional
@@ -7,6 +8,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.trace import format_trace_id, format_span_id
+from botocore.exceptions import ClientError
 
 class CloudWatchLogger:
     def __init__(self, log_group: str, log_stream: str, region: str = 'us-east-1'):
@@ -61,13 +63,14 @@ class CloudWatchLogger:
                 "span_id": format_span_id(span.get_span_context().span_id)
             }
 
-    def create_event(self, entities: List[Dict], low_confidence_entities: List[Dict], article_url: str) -> Dict:
+    def create_event(self, entities: List[Dict], low_confidence_entities: List[Dict], article_url: str,
+                     severity_text: str, severity_number: int) -> Dict:
         trace_context = self._generate_trace_context()
 
         event = {
             "timestamp": self._get_current_timestamp_ns(),
-            "severity": "INFO",
-            "severity_number": 9,
+            "severityText": severity_text,
+            "severityNumber": severity_number,
             "name": "news_feed.entity_extracted",
             "body": {
                 "entities": entities,
@@ -96,6 +99,47 @@ class CloudWatchLogger:
             }
         }
         return event
+
+    def generate_exception_event(self):
+        trace_context = self._generate_trace_context()
+
+        try:
+            # Force a divide-by-zero error
+            result = 1 / 0
+        except Exception as ex:
+            # Extract exception info
+            exc_type = type(ex).__name__
+            exc_msg = str(ex)
+            stack_trace = traceback.format_exc()
+            
+            # Start a span to capture trace context
+            event = {
+                "timestamp": int(time.time() * 1e9),  # nanoseconds
+                "severityText": "ERROR",
+                "severityNumber": 18, # Critical
+                "name": "news_feed.entity_extracted",
+                "body": "A divide-by-zero exception occurred",
+                "attributes": {
+                    "exception.type": exc_type,
+                    "exception.message": exc_msg,
+                    "exception.stacktrace": stack_trace,
+                },
+                "resource": {
+                    "attributes": {
+                        "service.name": "example_error_logger",
+                        "host.name": "local-dev"
+                    }
+                },
+                "instrumentation_scope": {
+                    "name": "example.error",
+                    "version": "1.0.0"
+                },
+                "trace_id": trace_context["trace_id"],
+                "span_id": trace_context["span_id"]
+            }
+
+            return event
+
 
     def send_event(self, event: Dict):
         self.send_events([event])

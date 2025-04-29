@@ -6,16 +6,16 @@ We recommend the adoption of Open Telemetry to generate application events and l
 
 ## OpenTelemetry
 
-The OpenTelemetry event data model is essentially a specialized subset of the OpenTelemetry Log Record data model. It is enhanced with semantic conventions to represent significant occurrences at a specific point in time. Here's a breakdown of the key components:
+The OpenTelemetry event data model is essentially a specialized subset of the OpenTelemetry Log Record data model. It is enhanced with semantic conventions to represent significant occurrences at a specific point in time.
 
 **Core Components of an Event (as a Log Record):**
 
-See <https://opentelemetry.io/docs/specs/otel/logs/data-model/> for reference
+Using [Logs Data Model](https://opentelemetry.io/docs/specs/otel/logs/data-model/) as reference, below is a high level summary of the event structure.
 
 * **Timestamp:** The exact time when the event occurred. This is crucial for temporal analysis and correlation with other telemetry data. It's typically recorded with high precision.
 * **Severity:** Indicates the importance or urgency of the event (e.g., TRACE, DEBUG, INFO, WARN, ERROR, FATAL). Represented by both:
-  * `SeverityNumber`: A numerical value. <https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber>
-  * `SeverityText`: A human-readable text. <https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber>
+  * [`SeverityNumber`](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitynumber): A numerical value. 
+  * [`SeverityText`](https://opentelemetry.io/docs/specs/otel/logs/data-model/#field-severitytext): A human-readable text. 
 * **Name (Event Name):** A descriptive identifier for the event (e.g., `order.placed`, `exception`). Event names should be meaningful and follow OpenTelemetry naming guidelines, often using a dot-separated structure to indicate scope (e.g., `<scope>.<entity>.<action>`).
 * **Body (Event Payload):** Contains the specific details or payload of the event. The body can be unstructured or structured data (e.g., a string, a JSON object). OpenTelemetry recommends using the body to represent the core information about the event. Semantic conventions for specific event types may define the expected structure and fields within the body.
 * **Attributes:** Key-value pairs that provide additional context and metadata about the event. Attributes can include things like user IDs, transaction IDs, error codes, and other relevant information that helps in filtering, grouping, and analyzing events. Unlike body fields which are specific to an event name, attributes can be compared across different event types or other telemetry signals.
@@ -23,7 +23,7 @@ See <https://opentelemetry.io/docs/specs/otel/logs/data-model/> for reference
 * **Instrumentation Scope:** Identifies the library or instrumentation that generated the event, including its name and version. This helps in understanding the origin of the telemetry data.
 * **Trace Context (TraceId, SpanId, TraceFlags):** If the event occurs within the context of a distributed trace, these fields link the event to a specific trace and span, allowing for correlation of events within a request flow.
 
-## OpenTelemetry NEWS Sample Event to CloudWatch Script
+## OpenTelemetry NEWS Sample Event generator and CloudWatch exporter script
 
 ### Overview
 
@@ -31,8 +31,6 @@ This Python script [logger.py](./logger.py) is used to illustrate the use of Ope
 
 1. **Generate a sample OpenTelemetry (OTel) event:** It creates a structured log event representing the output of a hypothetical NEWS Processing service handling news feed articles. This event includes details like extracted entities, confidence scores, trace context (trace ID, span ID), and resource information.
 2. **Send the event to AWS CloudWatch Logs:** It uses the `boto3` library to interact with AWS CloudWatch Logs, ensuring the target log group and stream exist (creating them if necessary) and then sending the generated OTel event as a log message.
-
-PS: For expanded details <https://opentelemetry.io/docs/languages/python/getting-started/> for a generic "get started with Open Telemetry" example.
 
 ### **Summary: `CloudWatchLogger` Class**
 
@@ -80,7 +78,7 @@ The `CloudWatchLogger` class is designed to **send structured log events to AWS 
 
 #### **Public Methods**
 
-##### **`create_event(entities, low_confidence_entities, article_url)`**
+##### **`create_event(entities, low_confidence_entities, article_url, severity_text, severity_number)`**
 
 * **Purpose**: Builds a structured log event with:
   * Timestamp
@@ -103,6 +101,10 @@ The `CloudWatchLogger` class is designed to **send structured log events to AWS 
   * Handles retry logic (up to 3 times) for `InvalidSequenceTokenException`.
   * Uses a thread lock to ensure only one thread sends logs at a time.
 
+#### **`generate_exception_event()`**
+
+* **Purpose**: Forces a divide by zero exception. Creates a OTEL critial error event. Returns the event to the caller.
+
 ---
 
 ### **Notable Features**
@@ -111,7 +113,8 @@ The `CloudWatchLogger` class is designed to **send structured log events to AWS 
 * Thread-safe log transmission
 * Retry logic for handling AWS sequence token issues
 * Uses `threading.Lock()` to ensure thread safety
-* Requires uncommenting and configuring `boto3` client for real AWS interaction
+* Requires configuring `boto3` client with the right credentials for AWS interaction in logger.py
+* Replace the dummy log_group, log_stream and region when initializing a CloudWatchLogger object in main.py
 
 ---
 
@@ -120,7 +123,9 @@ The `CloudWatchLogger` class is designed to **send structured log events to AWS 
 1. **Prerequisites:**
 
     * Python 3 installed.
-    * AWS credentials configured (e.g., via environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, or an IAM role if running on EC2/ECS/Lambda). The configured user/role needs permissions for `logs:CreateLogStream`, `logs:PutLogEvents`, `logs:DescribeLogGroups`, `logs:DescribeLogStreams`. Use the existing AWS managed permissions policy: `AmazonAPIGatewayPushToCloudWatchLogs`
+    * AWS credentials configured. Refer to [Default Credential Chain](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#specifying-credentials) for various options. 
+    
+    The configured user/role needs permissions for `logs:CreateLogStream`, `logs:PutLogEvents`, `logs:DescribeLogGroups`, `logs:DescribeLogStreams`. Use the existing AWS managed permissions policy: `AmazonAPIGatewayPushToCloudWatchLogs`
 
 2. **Install Dependencies (Ideally in a venv and activate it - so you don't pollute your global py environment):**
 
@@ -132,18 +137,29 @@ The `CloudWatchLogger` class is designed to **send structured log events to AWS 
     [If using uv package manager] uv sync
     ```
 
-3. **Address TODO on line 16 of CloudWatchLogger.init():** Use your preferred way to initialize the boto3 client with your credentials.
+3. **Address TODO in CloudWatchLogger.init():** Use your preferred way to initialize the boto3 client with your credentials.
 
-4. **Execute:**
+4. **Address TODO CloudWatchLogger intialization in main.py:** Replace the dummy log_group, log_stream and region.
+
+5. **Execute:**
 
     ```bash
     [If not using UV] python main.py
     [If using UV] uv run main.py
     ```
 
-The script will create the log group and log stream if they don't exist. Then 10 threads are spawned. Each thread will insert one otel event in the log stream. It will send the success or failure of sending the log event to CloudWatch.
+The script will create the log group and log stream if they don't exist. Then 10 threads are spawned. Each thread will simulate one INFO and one ERROR OTEL event with named entity recognition threshold values and send them to CloudWatch log stream. Finally in the main thread, an exception event is simulated and logged to Cloudwatch log stream.
 
 Output - Navigate to your Cloudwatch console and view the insert log entries.
+
+## References
+* OpenTelemetry primer
+  * [Observability Primer](https://opentelemetry.io/docs/concepts/observability-primer/)
+  * [Logs](https://opentelemetry.io/docs/concepts/signals/logs/)
+* OpenTelemetry for Python
+  * [SDK](https://opentelemetry.io/docs/languages/python/)
+  * [Getting Started](https://opentelemetry.io/docs/languages/python/getting-started/)
+
 
 ## [Future work] - OpenTelemetry Collector
 

@@ -16,16 +16,30 @@ def worker(logger: CloudWatchLogger, userId: int):
     event = logger.create_event(
         entities=[{"type": "PERSON", "value": f"User {userId}", "confidence": 0.91}],
         low_confidence_entities=[],
-        article_url=f"https://example.com/{userId}"
+        article_url=f"https://example.com/{userId}",
+        severity_text="INFO",
+        severity_number=9
     )
-    print(f"new event created for user Id: {userId}", event);
-    #logger.send_event(event)
+    print(f"new INFO event created for user Id: {userId}")
+    logger.send_event(event)
+
+    event = logger.create_event(
+        entities=[],
+        low_confidence_entities=[{"type": "PERSON", "value": f"User {userId}", "confidence": 0.6}],
+        article_url=f"https://example.com/{userId}",
+        severity_text="ERROR",
+        severity_number=17
+    )
+
+    print(f"new ERROR event created for user Id: {userId}")
+    logger.send_event(event)
 
 if __name__ == "__main__":
     logger = CloudWatchLogger(
-        log_group='/aws/news_feed_parser',
-        log_stream='entity_extraction_stream',
-        region='us-east-1'
+        # TODO: Replace the dummy log_group, log_stream and region.
+        log_group='<log_group_name>',
+        log_stream='<log_stream_name>',
+        region='<region>'
     )
 
     threads = []
@@ -38,4 +52,10 @@ if __name__ == "__main__":
     for t in threads:
         t.join()
 
-    print("All events sent.")
+    # Now simulate an exception event
+    print ("Simulating an divide by zero exception event")
+    exception_event = logger.generate_exception_event()
+    logger.send_event(exception_event)
+    print ("Logged divide by zero exception event")
+
+    print("All events sent. Check the CloudWatch logs dashboard for results.")
