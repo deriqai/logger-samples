@@ -1,6 +1,7 @@
 import json
 import time
 import boto3
+import threading
 from typing import List, Dict, Optional
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
