@@ -26,7 +26,7 @@ The OpenTelemetry event data model is essentially a specialized subset of the Op
 
 ### Overview
 
-This Python script [news-sample-event.py](./news-sample-event.py) is used to illustrate the use of OpenTelemetry. The app is focused on a hypothetical news feed consumption service. It will help you to learn the uses of various forms of logging and tracing in open telemetry format.
+This Python script [logger.py](./logger.py) is used to illustrate the use of OpenTelemetry. The app is focused on a hypothetical news feed consumption service. It will help you to learn the uses of various forms of logging and tracing in open telemetry format.
 
 1. **Generate a sample OpenTelemetry (OTel) event:** It creates a structured log event representing the output of a hypothetical NEWS Processing service handling news feed articles. This event includes details like extracted entities, confidence scores, trace context (trace ID, span ID), and resource information.
 2. **Send the event to AWS CloudWatch Logs:** It uses the `boto3` library to interact with AWS CloudWatch Logs, ensuring the target log group and stream exist (creating them if necessary) and then sending the generated OTel event as a log message.
@@ -113,18 +113,23 @@ The `CloudWatchLogger` class is designed to **send structured log events to AWS 
 1. **Prerequisites:**
 
     * Python 3 installed.
-    * AWS credentials configured (e.g., via environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, or an IAM role if running on EC2/ECS/Lambda). The configured user/role needs permissions for `logs:CreateLogStream` and `logs:PutLogEvents`.
+    * AWS credentials configured (e.g., via environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, or an IAM role if running on EC2/ECS/Lambda). The configured user/role needs permissions for `logs:CreateLogStream`, `logs:PutLogEvents`, `logs:DescribeLogGroups`, `logs:DescribeLogStreams`. Use the existing AWS managed permissions policy: `AmazonAPIGatewayPushToCloudWatchLogs`
 2. **Install Dependencies (Ideally in a venv and activate it - so you don't pollute your global py environment):**
 
     ```bash
-    pip install -r requirements.txt
+    [If using pip package manager] pip install -r requirements.txt
+
+    OR
+
+    [If using uv package manager] uv sync
     ```
 
 3. **Address TODO on line 16 of CloudWatchLogger.init():** Use your preferred way to initialize the boto3 client with your credentials.
 4. **Execute:**
 
     ```bash
-    python main.py
+    [If not using UV] python main.py
+    [If using UV] uv run main.py
     ```
 
 The script will create the log group and log stream if they don't exist. Then 10 threads are spawned. Each thread will insert one otel event in the log stream. It and the success or failure of sending the log event to CloudWatch.
