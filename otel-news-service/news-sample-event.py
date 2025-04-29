@@ -13,12 +13,13 @@ class CloudWatchLogger:
         self.log_group = log_group
         self.log_stream = log_stream
 
-        #TODO 
+        #TODO - Setup the boto client with your AWS credentials 
         # self.client = boto3.client('logs', region_name=region)
-        # self.sequence_token: Optional[str] = None
-        # self.lock = threading.Lock()  # Lock to protect writes
+        
+        self.sequence_token: Optional[str] = None
+        self.lock = threading.Lock()  # Lock to protect writes
 
-        # self._ensure_log_group_and_stream()
+        self._ensure_log_group_and_stream()
 
         # Setup OpenTelemetry tracer
         resource = Resource.create({"service.name": "news_feed_parser"})
