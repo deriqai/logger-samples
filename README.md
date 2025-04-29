@@ -6,6 +6,6 @@ Deriq.AI processes billions of log entries to extract insights that can lead to 
 Here are some samples for helpig you get started.
 
 1. [Simple Logger with Open Telemetry](./otel-getting-started/) to get started with.
-1. [Logger for a news service](./otel-news-service/) to get started with.
+1. [Logger for a news service](./otel-news-service/) for a multi-threaded news service sending Open Telemetry logs to AWS CloudWatch (in python).
 
 PS: See <https://opentelemetry.io/docs/languages/python/getting-started/> for a generic get started with Open Telemetry example. This example is mimicked in the getting started sample (1) above.

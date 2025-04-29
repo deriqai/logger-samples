@@ -1,6 +1,6 @@
 [project]
 name = "logger-samples"
-version = "0.1.0"
+version = "1.0.0"
 description = "Sample Loggers to illustrate the use of OpenTelemetry for logging and tracing"
 readme = "README.md"
 requires-python = ">=3.12"
